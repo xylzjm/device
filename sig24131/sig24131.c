@@ -1,4 +1,4 @@
-#include "../inc/sig24131.h"
+#include "sig24131.h"
 
 /* Internal commands and timing ------------------------------------------- */
 #define SIG24131_CMD_RESET 0x02U
