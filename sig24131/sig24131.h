@@ -5,9 +5,14 @@
  * @file sig24131.h
  * @brief MCU-independent driver interface for the SIG24131 ADC.
  *
- * The driver does not include any MCU, RTOS, or vendor SDK header.  The
+ * The driver does not include any MCU, RTOS, or vendor SDK header. The
  * application supplies the required platform operations through
- * sig24131_port_t when calling sig24131_init().
+ * sig24131_port_t when calling sig24131_ctor().
+ *
+ * The driver keeps no copy of the device registers: every question about the
+ * device is answered by the bus, so the driver can never disagree with the
+ * hardware. sig24131_ctor() only builds the object in RAM and never touches the
+ * device.
  */
 
 #include <stddef.h>
@@ -21,18 +26,19 @@ extern "C" {
 
 /** @brief Result of a driver operation. */
 typedef enum {
-    SIG24131_OK      = 0,
-    SIG24131_ERR_ARG = -1,
-    SIG24131_ERR_IO  = -2
+    SIG24131_OK         = 0,
+    SIG24131_ERR_ARG    = -1,
+    SIG24131_ERR_IO     = -2,
+    SIG24131_ERR_VERIFY = -3 /**< Read back configuration differs from the write. */
 } sig24131_status_t;
 
 /**
  * @brief Platform operations required by the driver.
  *
- * The SPI transfer must be full-duplex and transfer exactly len bytes.
- * If the platform controls CSn inside the SPI transfer, cs_assert and
- * cs_release may be NULL.  delay_us is optional; when it is NULL, the
- * driver performs no software delay.
+ * The SPI transfer must be full-duplex and transfer exactly len bytes. All four
+ * operations are required: sig24131_ctor() rejects a port that leaves any of
+ * them NULL. A platform that controls CSn inside its SPI transfer can still
+ * supply cs_assert/cs_release callbacks that do nothing.
  */
 typedef struct {
     void* ctx;
@@ -46,19 +52,14 @@ typedef struct {
                                   uint32_t us);
 } sig24131_port_t;
 
-/* Register addresses ------------------------------------------------------ */
+/* Registers --------------------------------------------------------------- */
 
-#define SIG24131_REG_CONF0  0x01U
-#define SIG24131_REG_CONF1  0x02U
-#define SIG24131_REG_OFFSET 0x03U
-#define SIG24131_REG_GAIN   0x04U
-
-/** @brief Calibration operation selector. */
-typedef enum {
-    SIG24131_CAL_SELF_OFFSET   = 0,
-    SIG24131_CAL_SYSTEM_OFFSET = 1,
-    SIG24131_CAL_SYSTEM_GAIN   = 2
-} sig24131_calibration_t;
+/* Calibration is not supported yet. The self/system offset and system gain
+ * commands would only be useful together with a data-ready wait and a known
+ * input stimulus, which the driver does not provide. The offset and gain
+ * calibration registers are kept out of this API for the same reason: a
+ * register write alone does not calibrate anything, because the value has to be
+ * derived from a measured result first. */
 
 /** @brief PGA gain selection. */
 typedef enum {
@@ -81,7 +82,7 @@ typedef enum {
 
 /** @brief ADC reference source selection. */
 typedef enum {
-    SIG24131_REF_EXTERNAL      = 0,
+    SIG24131_REF_EXTERNAL      = 0, /**< REFP and REFN. */
     SIG24131_REF_INTERNAL_2V5  = 2,
     SIG24131_REF_INTERNAL_1V17 = 3
 } sig24131_reference_t;
@@ -147,10 +148,54 @@ typedef enum {
 } sig24131_idac_current_t;
 
 /**
+ * @brief Input multiplexer selection for MUXP[3:0] and MUXN[3:0].
+ *
+ * Codes 0x9..0xE mean slightly different things depending on the side they are
+ * programmed into; the comments below give the MUXP meaning first and the MUXN
+ * meaning second where the two differ.
+ */
+typedef enum {
+    SIG24131_MUX_AIN0   = 0x0,
+    SIG24131_MUX_AIN1   = 0x1,
+    SIG24131_MUX_AIN2   = 0x2,
+    SIG24131_MUX_AIN3   = 0x3,
+    SIG24131_MUX_AIN4   = 0x4, /**< SIG24131 and SIG24132 only. */
+    SIG24131_MUX_AIN5   = 0x5, /**< SIG24131 and SIG24132 only. */
+    SIG24131_MUX_AIN6   = 0x6, /**< SIG24131 and SIG24132 only. */
+    SIG24131_MUX_AIN7   = 0x7, /**< SIG24131 and SIG24132 only. */
+    SIG24131_MUX_AINCOM = 0x8,
+    SIG24131_MUX_TEMP   = 0x9, /**< Internal sensor, positive and negative. */
+    SIG24131_MUX_REF    = 0xA, /**< REFP on MUXP, REFN on MUXN. */
+    SIG24131_MUX_AVSS   = 0xB,
+    SIG24131_MUX_DVSS   = 0xC,
+    SIG24131_MUX_AVDD_4 = 0xD, /**< (AVDD - AVSS) / 4, + on MUXP, - on MUXN. */
+    SIG24131_MUX_DVDD_4 = 0xE  /**< (DVDD - DVSS) / 4, + on MUXP, - on MUXN. */
+} sig24131_mux_t;
+
+/** @brief IDAC output routing for IDAC1_MUX[2:0] and IDAC2_MUX[2:0]. */
+typedef enum {
+    SIG24131_IDAC_MUX_AIN0 = 0,
+    SIG24131_IDAC_MUX_AIN1 = 1,
+    SIG24131_IDAC_MUX_AIN2 = 2,
+    SIG24131_IDAC_MUX_AIN3 = 3,
+    SIG24131_IDAC_MUX_AIN4 = 4, /**< SIG24131 and SIG24132 only. */
+    SIG24131_IDAC_MUX_AIN5 = 5, /**< SIG24131 and SIG24132 only. */
+    SIG24131_IDAC_MUX_AIN6 = 6, /**< SIG24131 and SIG24132 only. */
+    SIG24131_IDAC_MUX_AIN7 = 7  /**< SIG24131 and SIG24132 only. */
+} sig24131_idac_mux_t;
+
+/**
  * @brief SIG24131 configuration.
  *
- * mux_p and mux_n contain the CONF1 input multiplexer values.  idac1_mux and
- * idac2_mux contain the corresponding CONF0 IDAC routing values.
+ * mux_p and mux_n are the CONF1 input multiplexer values, idac1_mux and
+ * idac2_mux the CONF0 IDAC routing values.
+ *
+ * input_buffer_enable is honoured only at gain 1 and 2; at higher gains the
+ * device enables the input buffer regardless of the bit, so leaving it 0 there
+ * is harmless but also has no effect.
+ *
+ * The data checksum is not exposed: the vendor advises against enabling it, so
+ * the driver always leaves that bit cleared.
  */
 typedef struct {
     sig24131_gain_t gain;
@@ -159,10 +204,10 @@ typedef struct {
     sig24131_data_rate_t data_rate;
     sig24131_conv_delay_t conv_delay;
     sig24131_idac_current_t idac_current;
-    uint8_t mux_p;
-    uint8_t mux_n;
-    uint8_t idac1_mux;
-    uint8_t idac2_mux;
+    sig24131_mux_t mux_p;
+    sig24131_mux_t mux_n;
+    sig24131_idac_mux_t idac1_mux;
+    sig24131_idac_mux_t idac2_mux;
     uint8_t input_buffer_enable;
     uint8_t internal_reference_enable;
     uint8_t vbias_enable;
@@ -175,28 +220,43 @@ typedef struct {
     uint8_t reject_60hz;
 } sig24131_config_t;
 
-/** @brief Driver instance. The caller owns and provides the storage. */
+/**
+ * @brief Driver instance. The caller owns and provides the storage.
+ *
+ * The object holds the platform operations and nothing else, so it cannot drift
+ * out of step with the hardware. The member is managed by the driver and must
+ * not be modified by the caller.
+ */
 typedef struct {
     sig24131_port_t port;
-    sig24131_config_t config;
 } sig24131_t;
-
-/** @brief ADC sample bytes in MSB-first order. */
-typedef struct {
-    uint8_t data[3];
-} sig24131_sample_t;
 
 /** Fill config with the driver's reset-equivalent default configuration. */
 void sig24131_default_config(sig24131_config_t* config);
 
-/** Initialize a driver instance and bind its platform operations. */
-sig24131_status_t sig24131_init(sig24131_t* dev,
+/**
+ * @brief Construct a driver object.
+ *
+ * Copies the platform operations into the object. The device is not accessed,
+ * so the object is a pure RAM construct; the caller still has to reset or
+ * configure the device before the first conversion is meaningful.
+ *
+ * Returns SIG24131_ERR_ARG when dev or port is NULL or when any of the four
+ * port operations is missing.
+ */
+sig24131_status_t sig24131_ctor(sig24131_t* dev,
                                 const sig24131_port_t* port);
 
 /** Reset the ADC and wait for the required power-on/reset settling time. */
 sig24131_status_t sig24131_reset(sig24131_t* dev);
 
-/** Restart/synchronize ADC conversion timing. */
+/**
+ * @brief Restart the conversion.
+ *
+ * The digital filter is reset and a new conversion starts, so the result that
+ * was in progress is discarded. Use it to align the conversion phase after a
+ * sleep or to drop a sample taken during a disturbance.
+ */
 sig24131_status_t sig24131_sync(sig24131_t* dev);
 
 /** Enter low-power sleep mode. */
@@ -206,43 +266,51 @@ sig24131_status_t sig24131_sleep(sig24131_t* dev);
 sig24131_status_t sig24131_wakeup(sig24131_t* dev);
 
 /**
- * Start one calibration operation.
+ * @brief Write CONF0 and CONF1 and verify that the device stored them.
  *
- * The analog inputs must be prepared according to the selected operation:
- * self offset shorts the ADC inputs internally, system offset requires a null
- * input, and system gain requires a full-scale input.
+ * A write to either configuration register resets the digital filter and starts
+ * a new conversion, so every successful call discards the conversion that was
+ * in progress and the caller has to wait for settled data again before the next
+ * sample is meaningful.
+ *
+ * WREG has no acknowledge, so the driver reads both registers back and compares
+ * them with what it sent. SIG24131_ERR_VERIFY means the device holds something
+ * else.
  */
-sig24131_status_t sig24131_calibrate(sig24131_t* dev,
-                                     sig24131_calibration_t calibration);
-
-/** Write one 24-bit register. */
-sig24131_status_t sig24131_write_register(sig24131_t* dev,
-                                          uint8_t address,
-                                          uint32_t value);
-
-/** Read one 24-bit register. */
-sig24131_status_t sig24131_read_register(sig24131_t* dev,
-                                         uint8_t address,
-                                         uint32_t* value);
-
-/** Write CONF0 and CONF1 from config and update the cached configuration. */
 sig24131_status_t sig24131_write_config(sig24131_t* dev,
                                         const sig24131_config_t* config);
 
-/** Read CONF0 and CONF1 into config and update the cached configuration. */
+/**
+ * @brief Read CONF0 and CONF1 from the device and decode them into config.
+ *
+ * Costs two SPI register reads. Use it to inspect a device whose configuration
+ * is not known, for example after a supply event that may have reset it.
+ */
 sig24131_status_t sig24131_read_config(sig24131_t* dev,
                                        sig24131_config_t* config);
 
 /**
- * Read the latest ADC conversion through the safe command-read method.
+ * @brief Read the latest ADC conversion as a signed 24-bit code.
  *
- * The returned sample contains the 24-bit conversion code, MSB first.
+ * The 24-bit two's-complement result is sign-extended into *code, so a zero
+ * differential input reads as 0 and both rails read as +-8388608.
+ *
+ * The function does not wait for new data: the application polls it at the
+ * configured data rate. A poll that arrives before the next conversion returns
+ * the previous result again, which the caller has to tolerate or filter.
  */
 sig24131_status_t sig24131_read_data(sig24131_t* dev,
-                                     sig24131_sample_t* sample);
+                                     int32_t* code);
 
-/** Convert an ADC sample to a signed 32-bit two's-complement value. */
-int32_t sig24131_code_to_int32(const sig24131_sample_t* sample);
+/**
+ * @brief Nominal output rate of a data-rate code, in millihertz.
+ *
+ * Returns 0 for a code that is not one of the defined rates. The effective
+ * conversion period also depends on the filter and on the latency bit, so treat
+ * this as the nominal rate the code stands for, not as a guaranteed period.
+ * One conversion period in milliseconds is 1000000 / rate_millihz.
+ */
+uint32_t sig24131_data_rate_millihz(sig24131_data_rate_t rate);
 
 #ifdef __cplusplus
 }
