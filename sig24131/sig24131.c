@@ -342,7 +342,8 @@ sig24131_status_t sig24131_write_config(sig24131_t* dev,
     if ( config->gain > SIG24131_GAIN_2 ) {
         care &= ~SIG24131_CONF0_BUF;
     }
-    if ( ((read_conf0 ^ expected_conf0) & care) != 0U || read_conf1 != expected_conf1 ) {
+    if ( ((read_conf0 ^ expected_conf0) & care) != 0U
+         || read_conf1 != expected_conf1 ) {
         return SIG24131_ERR_VERIFY;
     }
     return SIG24131_OK;
