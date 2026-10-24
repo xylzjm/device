@@ -316,14 +316,17 @@ sig24131_status_t sig24131_read_data(sig24131_t* dev,
                                      int32_t* code);
 
 /**
- * @brief Nominal output rate of a data-rate code, in millihertz.
+ * @brief Data-rate code that produces a nominal output rate.
  *
- * Returns 0 for a code that is not one of the defined rates. The effective
- * conversion period also depends on the filter and on the latency bit, so treat
- * this as the nominal rate the code stands for, not as a guaranteed period.
- * One conversion period in milliseconds is 1000000 / rate_millihz.
+ * Returns SIG24131_OK and stores the code in *data_rate when rate_millihz is
+ * one of the defined rates. Returns SIG24131_ERR_ARG when data_rate is NULL,
+ * rate_millihz is zero, or no code has that nominal rate.
+ *
+ * The nominal conversion period is 1000000 / rate_millihz milliseconds; the
+ * filter and the latency bit can stretch it further.
  */
-uint32_t sig24131_data_rate_millihz(sig24131_data_rate_t rate);
+sig24131_status_t sig24131_data_rate_from_millihz(uint32_t rate_millihz,
+                                                  sig24131_data_rate_t* data_rate);
 
 #ifdef __cplusplus
 }

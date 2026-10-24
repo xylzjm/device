@@ -404,41 +404,62 @@ sig24131_status_t sig24131_read_data(sig24131_t* dev,
     return SIG24131_OK;
 }
 
-uint32_t sig24131_data_rate_millihz(sig24131_data_rate_t rate)
+/* Data rates ------------------------------------------------------------- */
+
+typedef struct {
+    sig24131_data_rate_t code;
+    uint32_t millihz;
+} data_rate_entry_t;
+
+static const data_rate_entry_t data_rate_table[] = {
+    {SIG24131_RATE_2_5, 2500U},
+    {SIG24131_RATE_5, 5000U},
+    {SIG24131_RATE_10, 10000U},
+    {SIG24131_RATE_12_5, 12500U},
+    {SIG24131_RATE_15, 15000U},
+    {SIG24131_RATE_20, 20000U},
+    {SIG24131_RATE_25, 25000U},
+    {SIG24131_RATE_30, 30000U},
+    {SIG24131_RATE_40, 40000U},
+    {SIG24131_RATE_50, 50000U},
+    {SIG24131_RATE_60, 60000U},
+    {SIG24131_RATE_80, 80000U},
+    {SIG24131_RATE_100, 100000U},
+    {SIG24131_RATE_120, 120000U},
+    {SIG24131_RATE_160, 160000U},
+    {SIG24131_RATE_200, 200000U},
+    {SIG24131_RATE_240, 240000U},
+    {SIG24131_RATE_250, 250000U},
+    {SIG24131_RATE_300, 300000U},
+    {SIG24131_RATE_400, 400000U},
+    {SIG24131_RATE_480, 480000U},
+    {SIG24131_RATE_500, 500000U},
+    {SIG24131_RATE_600, 600000U},
+    {SIG24131_RATE_800, 800000U},
+    {SIG24131_RATE_1000, 1000000U},
+    {SIG24131_RATE_1200, 1200000U},
+    {SIG24131_RATE_2000, 2000000U},
+    {SIG24131_RATE_2400, 2400000U},
+    {SIG24131_RATE_4000, 4000000U},
+    {SIG24131_RATE_4800, 4800000U},
+    {SIG24131_RATE_8000, 8000000U},
+    {SIG24131_RATE_9600, 9600000U},
+};
+
+sig24131_status_t sig24131_data_rate_from_millihz(uint32_t rate_millihz,
+                                                  sig24131_data_rate_t* data_rate)
 {
-    switch ( rate ) {
-        case SIG24131_RATE_2_5:  return 2500U;
-        case SIG24131_RATE_5:    return 5000U;
-        case SIG24131_RATE_10:   return 10000U;
-        case SIG24131_RATE_12_5: return 12500U;
-        case SIG24131_RATE_15:   return 15000U;
-        case SIG24131_RATE_20:   return 20000U;
-        case SIG24131_RATE_25:   return 25000U;
-        case SIG24131_RATE_30:   return 30000U;
-        case SIG24131_RATE_40:   return 40000U;
-        case SIG24131_RATE_50:   return 50000U;
-        case SIG24131_RATE_60:   return 60000U;
-        case SIG24131_RATE_80:   return 80000U;
-        case SIG24131_RATE_100:  return 100000U;
-        case SIG24131_RATE_120:  return 120000U;
-        case SIG24131_RATE_160:  return 160000U;
-        case SIG24131_RATE_200:  return 200000U;
-        case SIG24131_RATE_240:  return 240000U;
-        case SIG24131_RATE_250:  return 250000U;
-        case SIG24131_RATE_300:  return 300000U;
-        case SIG24131_RATE_400:  return 400000U;
-        case SIG24131_RATE_480:  return 480000U;
-        case SIG24131_RATE_500:  return 500000U;
-        case SIG24131_RATE_600:  return 600000U;
-        case SIG24131_RATE_800:  return 800000U;
-        case SIG24131_RATE_1000: return 1000000U;
-        case SIG24131_RATE_1200: return 1200000U;
-        case SIG24131_RATE_2000: return 2000000U;
-        case SIG24131_RATE_2400: return 2400000U;
-        case SIG24131_RATE_4000: return 4000000U;
-        case SIG24131_RATE_4800: return 4800000U;
-        case SIG24131_RATE_8000: return 8000000U;
-        case SIG24131_RATE_9600: return 9600000U;
-        default:                 return 0U;
+    size_t i;
+
+    if ( data_rate == NULL || rate_millihz == 0U ) {
+        return SIG24131_ERR_ARG;
     }
+
+    for ( i = 0U; i < sizeof(data_rate_table) / sizeof(data_rate_table[0]); i++ ) {
+        if ( data_rate_table[i].millihz == rate_millihz ) {
+            *data_rate = data_rate_table[i].code;
+            return SIG24131_OK;
+        }
+    }
+    return SIG24131_ERR_ARG;
 }
