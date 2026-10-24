@@ -22,9 +22,6 @@
 /** Widest register address the 5-bit address field of a command can carry. */
 #define SIG24131_ADDRESS_MAX 0x1FU
 
-/** Wait required after power-on or after a reset command, in microseconds. */
-#define SIG24131_RESET_DELAY_US 43000U
-
 /* Platform operations ---------------------------------------------------- */
 
 static sig24131_status_t begin_frame(sig24131_t* dev)
@@ -54,15 +51,6 @@ static sig24131_status_t transfer(sig24131_t* dev,
         return SIG24131_ERR_ARG;
     }
     return dev->port.spi_transfer(dev->port.ctx, tx, rx, len);
-}
-
-static sig24131_status_t delay(sig24131_t* dev,
-                               uint32_t us)
-{
-    if ( dev == NULL || dev->port.delay_us == NULL ) {
-        return SIG24131_ERR_ARG;
-    }
-    return dev->port.delay_us(dev->port.ctx, us);
 }
 
 /**
@@ -232,8 +220,7 @@ sig24131_status_t sig24131_ctor(sig24131_t* dev,
     if ( dev == NULL || port == NULL
          || port->spi_transfer == NULL
          || port->cs_assert == NULL
-         || port->cs_release == NULL
-         || port->delay_us == NULL ) {
+         || port->cs_release == NULL ) {
         return SIG24131_ERR_ARG;
     }
     dev->port = *port;
@@ -242,13 +229,7 @@ sig24131_status_t sig24131_ctor(sig24131_t* dev,
 
 sig24131_status_t sig24131_reset(sig24131_t* dev)
 {
-    sig24131_status_t status;
-
-    status = send_command(dev, SIG24131_CMD_RESET);
-    if ( status != SIG24131_OK ) {
-        return status;
-    }
-    return delay(dev, SIG24131_RESET_DELAY_US);
+    return send_command(dev, SIG24131_CMD_RESET);
 }
 
 sig24131_status_t sig24131_sync(sig24131_t* dev)

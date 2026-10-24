@@ -35,7 +35,7 @@ typedef enum {
 /**
  * @brief Platform operations required by the driver.
  *
- * The SPI transfer must be full-duplex and transfer exactly len bytes. All four
+ * The SPI transfer must be full-duplex and transfer exactly len bytes. All three
  * operations are required: sig24131_ctor() rejects a port that leaves any of
  * them NULL. A platform that controls CSn inside its SPI transfer can still
  * supply cs_assert/cs_release callbacks that do nothing.
@@ -48,8 +48,6 @@ typedef struct {
                                       size_t len);
     sig24131_status_t (*cs_assert)(void* ctx);
     sig24131_status_t (*cs_release)(void* ctx);
-    sig24131_status_t (*delay_us)(void* ctx,
-                                  uint32_t us);
 } sig24131_port_t;
 
 /* Registers --------------------------------------------------------------- */
@@ -241,13 +239,28 @@ void sig24131_default_config(sig24131_config_t* config);
  * so the object is a pure RAM construct; the caller still has to reset or
  * configure the device before the first conversion is meaningful.
  *
- * Returns SIG24131_ERR_ARG when dev or port is NULL or when any of the four
+ * Returns SIG24131_ERR_ARG when dev or port is NULL or when any of the three
  * port operations is missing.
  */
 sig24131_status_t sig24131_ctor(sig24131_t* dev,
                                 const sig24131_port_t* port);
 
-/** Reset the ADC and wait for the required power-on/reset settling time. */
+/**
+ * @brief Settling time the device needs after a reset, in milliseconds.
+ *
+ * No register may be written or read before it has elapsed. The driver does not
+ * wait, so a caller that resets several devices on one bus can send every
+ * command first and wait once afterwards.
+ */
+#define SIG24131_RESET_DELAY_MS 43U
+
+/**
+ * @brief Send the reset command.
+ *
+ * The registers return to their reset values and the device needs
+ * SIG24131_RESET_DELAY_MS before it is usable again; see the note on that
+ * constant.
+ */
 sig24131_status_t sig24131_reset(sig24131_t* dev);
 
 /**
