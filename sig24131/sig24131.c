@@ -48,7 +48,9 @@ static sig24131_status_t transfer(sig24131_t* dev,
                                   uint8_t* rx,
                                   size_t len)
 {
-    if ( dev == NULL || dev->port.spi_transfer == NULL || tx == NULL || rx == NULL ) {
+    if ( dev == NULL
+         || dev->port.spi_transfer == NULL
+         || tx == NULL || rx == NULL ) {
         return SIG24131_ERR_ARG;
     }
     return dev->port.spi_transfer(dev->port.ctx, tx, rx, len);
@@ -102,7 +104,9 @@ static sig24131_status_t send_command(sig24131_t* dev,
 
 static uint32_t get_u24(const uint8_t* data)
 {
-    return ((uint32_t)data[0] << 16) | ((uint32_t)data[1] << 8) | (uint32_t)data[2];
+    return ((uint32_t)data[0] << 16)
+           | ((uint32_t)data[1] << 8)
+           | (uint32_t)data[2];
 }
 
 static void put_u24(uint8_t* data,
@@ -225,8 +229,11 @@ void sig24131_default_config(sig24131_config_t* config)
 sig24131_status_t sig24131_ctor(sig24131_t* dev,
                                 const sig24131_port_t* port)
 {
-    if ( dev == NULL || port == NULL || port->spi_transfer == NULL || port->cs_assert == NULL
-         || port->cs_release == NULL || port->delay_us == NULL ) {
+    if ( dev == NULL || port == NULL
+         || port->spi_transfer == NULL
+         || port->cs_assert == NULL
+         || port->cs_release == NULL
+         || port->delay_us == NULL ) {
         return SIG24131_ERR_ARG;
     }
     dev->port = *port;
@@ -280,7 +287,9 @@ static sig24131_status_t write_register(sig24131_t* dev,
     uint8_t tx[1U + SIG24131_DATA_BYTES];
     uint8_t rx[1U + SIG24131_DATA_BYTES];
 
-    if ( dev == NULL || (uint32_t)address > SIG24131_ADDRESS_MAX || value > 0xFFFFFFU ) {
+    if ( dev == NULL
+         || (uint32_t)address > SIG24131_ADDRESS_MAX
+         || value > 0xFFFFFFU ) {
         return SIG24131_ERR_ARG;
     }
     tx[0] = (uint8_t)(SIG24131_CMD_WRITE_REG | (uint8_t)address);
@@ -297,7 +306,8 @@ static sig24131_status_t read_register(sig24131_t* dev,
     uint8_t rx[1U + SIG24131_DATA_BYTES] = {0U};
     sig24131_status_t status;
 
-    if ( dev == NULL || value == NULL || (uint32_t)address > SIG24131_ADDRESS_MAX ) {
+    if ( dev == NULL || value == NULL
+         || (uint32_t)address > SIG24131_ADDRESS_MAX ) {
         return SIG24131_ERR_ARG;
     }
     tx[0]  = (uint8_t)(SIG24131_CMD_READ_REG | (uint8_t)address);
@@ -415,71 +425,38 @@ sig24131_status_t sig24131_read_data(sig24131_t* dev,
 uint32_t sig24131_data_rate_millihz(sig24131_data_rate_t rate)
 {
     switch ( rate ) {
-        case SIG24131_RATE_2_5:
-            return 2500U;
-        case SIG24131_RATE_5:
-            return 5000U;
-        case SIG24131_RATE_10:
-            return 10000U;
-        case SIG24131_RATE_12_5:
-            return 12500U;
-        case SIG24131_RATE_15:
-            return 15000U;
-        case SIG24131_RATE_20:
-            return 20000U;
-        case SIG24131_RATE_25:
-            return 25000U;
-        case SIG24131_RATE_30:
-            return 30000U;
-        case SIG24131_RATE_40:
-            return 40000U;
-        case SIG24131_RATE_50:
-            return 50000U;
-        case SIG24131_RATE_60:
-            return 60000U;
-        case SIG24131_RATE_80:
-            return 80000U;
-        case SIG24131_RATE_100:
-            return 100000U;
-        case SIG24131_RATE_120:
-            return 120000U;
-        case SIG24131_RATE_160:
-            return 160000U;
-        case SIG24131_RATE_200:
-            return 200000U;
-        case SIG24131_RATE_240:
-            return 240000U;
-        case SIG24131_RATE_250:
-            return 250000U;
-        case SIG24131_RATE_300:
-            return 300000U;
-        case SIG24131_RATE_400:
-            return 400000U;
-        case SIG24131_RATE_480:
-            return 480000U;
-        case SIG24131_RATE_500:
-            return 500000U;
-        case SIG24131_RATE_600:
-            return 600000U;
-        case SIG24131_RATE_800:
-            return 800000U;
-        case SIG24131_RATE_1000:
-            return 1000000U;
-        case SIG24131_RATE_1200:
-            return 1200000U;
-        case SIG24131_RATE_2000:
-            return 2000000U;
-        case SIG24131_RATE_2400:
-            return 2400000U;
-        case SIG24131_RATE_4000:
-            return 4000000U;
-        case SIG24131_RATE_4800:
-            return 4800000U;
-        case SIG24131_RATE_8000:
-            return 8000000U;
-        case SIG24131_RATE_9600:
-            return 9600000U;
-        default:
-            return 0U;
+        case SIG24131_RATE_2_5:  return 2500U;
+        case SIG24131_RATE_5:    return 5000U;
+        case SIG24131_RATE_10:   return 10000U;
+        case SIG24131_RATE_12_5: return 12500U;
+        case SIG24131_RATE_15:   return 15000U;
+        case SIG24131_RATE_20:   return 20000U;
+        case SIG24131_RATE_25:   return 25000U;
+        case SIG24131_RATE_30:   return 30000U;
+        case SIG24131_RATE_40:   return 40000U;
+        case SIG24131_RATE_50:   return 50000U;
+        case SIG24131_RATE_60:   return 60000U;
+        case SIG24131_RATE_80:   return 80000U;
+        case SIG24131_RATE_100:  return 100000U;
+        case SIG24131_RATE_120:  return 120000U;
+        case SIG24131_RATE_160:  return 160000U;
+        case SIG24131_RATE_200:  return 200000U;
+        case SIG24131_RATE_240:  return 240000U;
+        case SIG24131_RATE_250:  return 250000U;
+        case SIG24131_RATE_300:  return 300000U;
+        case SIG24131_RATE_400:  return 400000U;
+        case SIG24131_RATE_480:  return 480000U;
+        case SIG24131_RATE_500:  return 500000U;
+        case SIG24131_RATE_600:  return 600000U;
+        case SIG24131_RATE_800:  return 800000U;
+        case SIG24131_RATE_1000: return 1000000U;
+        case SIG24131_RATE_1200: return 1200000U;
+        case SIG24131_RATE_2000: return 2000000U;
+        case SIG24131_RATE_2400: return 2400000U;
+        case SIG24131_RATE_4000: return 4000000U;
+        case SIG24131_RATE_4800: return 4800000U;
+        case SIG24131_RATE_8000: return 8000000U;
+        case SIG24131_RATE_9600: return 9600000U;
+        default:                 return 0U;
     }
 }
