@@ -5,14 +5,10 @@
  * @file sig24131.h
  * @brief MCU-independent driver interface for the SIG24131 ADC.
  *
- * The driver does not include any MCU, RTOS, or vendor SDK header. The
- * application supplies the required platform operations through
- * sig24131_port_t when calling sig24131_ctor().
- *
- * The driver keeps no copy of the device registers: every question about the
- * device is answered by the bus, so the driver can never disagree with the
- * hardware. sig24131_ctor() only builds the object in RAM and never touches the
- * device.
+ * The driver includes no MCU, RTOS or vendor SDK header: the application
+ * supplies the platform operations through sig24131_port_t. It caches no
+ * device register, so every answer comes from the bus, and sig24131_ctor()
+ * only builds the object in RAM without touching the device.
  */
 
 #include <stddef.h>
@@ -22,26 +18,28 @@
 extern "C" {
 #endif
 
-/* External capability interface ------------------------------------------ */
+/*----------------------------------------------------------------------------*/
+/* External capability interface                                              */
+/*----------------------------------------------------------------------------*/
 
 /** @brief Result of a driver operation. */
 typedef enum {
     SIG24131_OK         = 0,
     SIG24131_ERR_ARG    = -1,
     SIG24131_ERR_IO     = -2,
-    SIG24131_ERR_VERIFY = -3 /**< Read back configuration differs from the write. */
+    SIG24131_ERR_VERIFY = -3 /**< Read-back differs from the write. */
 } sig24131_status_t;
 
 /**
  * @brief Platform operations required by the driver.
  *
- * The SPI transfer must be full-duplex and transfer exactly len bytes. All three
- * operations are required: sig24131_ctor() rejects a port that leaves any of
- * them NULL. A platform that controls CSn inside its SPI transfer can still
- * supply cs_assert/cs_release callbacks that do nothing.
+ * The SPI transfer must be full-duplex and transfer exactly len bytes. All
+ * three operations are required: sig24131_ctor() rejects a port that leaves
+ * any of them NULL. A platform that controls CSn inside its SPI transfer can
+ * still supply cs_assert/cs_release callbacks that do nothing.
  */
 typedef struct {
-    void* ctx;
+    void* ctx; /**< Passed back to every callback. */
     sig24131_status_t (*spi_transfer)(void* ctx,
                                       const uint8_t* tx,
                                       uint8_t* rx,
@@ -50,14 +48,12 @@ typedef struct {
     sig24131_status_t (*cs_release)(void* ctx);
 } sig24131_port_t;
 
-/* Registers --------------------------------------------------------------- */
+/*----------------------------------------------------------------------------*/
+/* Registers                                                                  */
+/*----------------------------------------------------------------------------*/
 
-/* Calibration is not supported yet. The self/system offset and system gain
- * commands would only be useful together with a data-ready wait and a known
- * input stimulus, which the driver does not provide. The offset and gain
- * calibration registers are kept out of this API for the same reason: a
- * register write alone does not calibrate anything, because the value has to be
- * derived from a measured result first. */
+/* Calibration is out of scope: a register write alone does not calibrate
+ * anything without a known stimulus and a settled measurement. */
 
 /** @brief PGA gain selection. */
 typedef enum {
@@ -229,7 +225,11 @@ typedef struct {
     sig24131_port_t port;
 } sig24131_t;
 
-/** Fill config with the driver's reset-equivalent default configuration. */
+/**
+ * @brief Fill config with the driver's reset-equivalent defaults.
+ *
+ * @param config Destination for the default settings. NULL is ignored.
+ */
 void sig24131_default_config(sig24131_config_t* config);
 
 /**
@@ -239,8 +239,10 @@ void sig24131_default_config(sig24131_config_t* config);
  * so the object is a pure RAM construct; the caller still has to reset or
  * configure the device before the first conversion is meaningful.
  *
- * Returns SIG24131_ERR_ARG when dev or port is NULL or when any of the three
- * port operations is missing.
+ * @param dev Caller-owned storage for the object.
+ * @param port Platform operations to copy; all three callbacks are required.
+ * @return SIG24131_OK, or SIG24131_ERR_ARG for a NULL argument or a missing
+ *         callback.
  */
 sig24131_status_t sig24131_ctor(sig24131_t* dev,
                                 const sig24131_port_t* port);
@@ -248,47 +250,65 @@ sig24131_status_t sig24131_ctor(sig24131_t* dev,
 /**
  * @brief Settling time the device needs after a reset, in milliseconds.
  *
- * No register may be written or read before it has elapsed. The driver does not
- * wait, so a caller that resets several devices on one bus can send every
- * command first and wait once afterwards.
+ * @note No register may be written or read before it has elapsed. The driver
+ *       does not wait, so a caller that resets several devices on one bus can
+ *       send every command first and wait once afterwards.
  */
 #define SIG24131_RESET_DELAY_MS 43U
 
 /**
  * @brief Send the reset command.
  *
- * The registers return to their reset values and the device needs
- * SIG24131_RESET_DELAY_MS before it is usable again; see the note on that
- * constant.
+ * @param dev Constructed driver object.
+ * @return SIG24131_OK, SIG24131_ERR_ARG for a NULL argument, or a platform
+ *         error passed through.
+ * @note The registers return to their reset values and the device needs
+ *       SIG24131_RESET_DELAY_MS before it is usable again.
  */
 sig24131_status_t sig24131_reset(sig24131_t* dev);
 
 /**
  * @brief Restart the conversion.
  *
- * The digital filter is reset and a new conversion starts, so the result that
- * was in progress is discarded. Use it to align the conversion phase after a
- * sleep or to drop a sample taken during a disturbance.
+ * @param dev Constructed driver object.
+ * @return SIG24131_OK, SIG24131_ERR_ARG for a NULL argument, or a platform
+ *         error passed through.
+ * @note The digital filter is reset and a new conversion starts, so the
+ *       result that was in progress is discarded. Use it to align the
+ *       conversion phase after a sleep or to drop a disturbed sample.
  */
 sig24131_status_t sig24131_sync(sig24131_t* dev);
 
-/** Enter low-power sleep mode. */
+/**
+ * @brief Enter low-power sleep mode.
+ *
+ * @param dev Constructed driver object.
+ * @return SIG24131_OK, SIG24131_ERR_ARG for a NULL argument, or a platform
+ *         error passed through.
+ */
 sig24131_status_t sig24131_sleep(sig24131_t* dev);
 
-/** Leave low-power sleep mode. */
+/**
+ * @brief Leave low-power sleep mode.
+ *
+ * @param dev Constructed driver object.
+ * @return SIG24131_OK, SIG24131_ERR_ARG for a NULL argument, or a platform
+ *         error passed through.
+ */
 sig24131_status_t sig24131_wakeup(sig24131_t* dev);
 
 /**
  * @brief Write CONF0 and CONF1 and verify that the device stored them.
  *
- * A write to either configuration register resets the digital filter and starts
- * a new conversion, so every successful call discards the conversion that was
- * in progress and the caller has to wait for settled data again before the next
- * sample is meaningful.
- *
- * WREG has no acknowledge, so the driver reads both registers back and compares
- * them with what it sent. SIG24131_ERR_VERIFY means the device holds something
- * else.
+ * @param dev Constructed driver object.
+ * @param config Settings to write.
+ * @return SIG24131_OK, SIG24131_ERR_ARG for a NULL argument, a platform error
+ *         when a transfer fails, or SIG24131_ERR_VERIFY when the read-back
+ *         differs.
+ * @note A write to either register resets the digital filter and starts a new
+ *       conversion, so every successful call discards the conversion that was
+ *       in progress. WREG has no acknowledge, which is why both registers are
+ *       read back and compared.
  */
 sig24131_status_t sig24131_write_config(sig24131_t* dev,
                                         const sig24131_config_t* config);
@@ -296,8 +316,12 @@ sig24131_status_t sig24131_write_config(sig24131_t* dev,
 /**
  * @brief Read CONF0 and CONF1 from the device and decode them into config.
  *
- * Costs two SPI register reads. Use it to inspect a device whose configuration
- * is not known, for example after a supply event that may have reset it.
+ * @param dev Constructed driver object.
+ * @param config Destination for the decoded settings.
+ * @return SIG24131_OK, SIG24131_ERR_ARG for a NULL argument, or a platform
+ *         error passed through.
+ * @note Costs two SPI register reads. Use it to inspect a device whose
+ *       configuration is unknown, for example after a supply event.
  */
 sig24131_status_t sig24131_read_config(sig24131_t* dev,
                                        sig24131_config_t* config);
@@ -305,25 +329,27 @@ sig24131_status_t sig24131_read_config(sig24131_t* dev,
 /**
  * @brief Read the latest ADC conversion as a signed 24-bit code.
  *
- * The 24-bit two's-complement result is sign-extended into *code, so a zero
- * differential input reads as 0 and both rails read as +-8388608.
- *
- * The function does not wait for new data: the application polls it at the
- * configured data rate. A poll that arrives before the next conversion returns
- * the previous result again, which the caller has to tolerate or filter.
+ * @param dev Constructed driver object.
+ * @param code Destination for the sign-extended 24-bit result.
+ * @return SIG24131_OK, SIG24131_ERR_ARG for a NULL argument, or a platform
+ *         error passed through.
+ * @note The result is sign-extended, so a zero differential input reads as 0
+ *       and both rails read as +-8388608. The function does not wait for new
+ *       data: poll it at the configured data rate, and tolerate the previous
+ *       result when a poll arrives before the next conversion completes.
  */
 sig24131_status_t sig24131_read_data(sig24131_t* dev,
                                      int32_t* code);
 
 /**
- * @brief Data-rate code that produces a nominal output rate.
+ * @brief Return the code for a nominal output rate.
  *
- * Returns SIG24131_OK and stores the code in *data_rate when rate_millihz is
- * one of the defined rates. Returns SIG24131_ERR_ARG when data_rate is NULL,
- * rate_millihz is zero, or no code has that nominal rate.
- *
- * The nominal conversion period is 1000000 / rate_millihz milliseconds; the
- * filter and the latency bit can stretch it further.
+ * @param rate_millihz Nominal rate in millihertz.
+ * @param data_rate Destination for the code.
+ * @return SIG24131_OK when the rate is found, or SIG24131_ERR_ARG when
+ *         data_rate is NULL, rate_millihz is zero, or no code has that rate.
+ * @note The nominal conversion period is 1000000 / rate_millihz milliseconds;
+ *       the filter and the latency bit can stretch it further.
  */
 sig24131_status_t sig24131_data_rate_from_millihz(uint32_t rate_millihz,
                                                   sig24131_data_rate_t* data_rate);

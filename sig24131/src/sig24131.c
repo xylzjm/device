@@ -1,7 +1,10 @@
 #include "sig24131.h"
 
-/* Commands --------------------------------------------------------------- */
+/*----------------------------------------------------------------------------*/
+/* Commands                                                                   */
+/*----------------------------------------------------------------------------*/
 
+/** @brief Command byte values. */
 #define SIG24131_CMD_RESET     0x02U
 #define SIG24131_CMD_SYNC      0x04U
 #define SIG24131_CMD_SLEEP     0x0AU
@@ -10,19 +13,22 @@
 #define SIG24131_CMD_WRITE_REG 0x20U
 #define SIG24131_CMD_READ_DATA 0x60U
 
-/* Frame layout ----------------------------------------------------------- */
+/*----------------------------------------------------------------------------*/
+/* Frame layout                                                               */
+/*----------------------------------------------------------------------------*/
 
-/*
- * Every operation starts with one command byte. Register accesses append 24
- * bits of register data; a conversion read appends 24 bits of conversion data.
- */
+/* Every operation starts with one command byte; register and conversion
+ * reads append 24 bits of data. */
 
+/** @brief Bytes in the 24-bit data field of a frame. */
 #define SIG24131_DATA_BYTES 3U
 
-/** Widest register address the 5-bit address field of a command can carry. */
+/** @brief Widest register address the 5-bit command field can carry. */
 #define SIG24131_ADDRESS_MAX 0x1FU
 
-/* Platform operations ---------------------------------------------------- */
+/*----------------------------------------------------------------------------*/
+/* Platform operations                                                        */
+/*----------------------------------------------------------------------------*/
 
 static sig24131_status_t begin_frame(sig24131_t* dev)
 {
@@ -53,13 +59,8 @@ static sig24131_status_t transfer(sig24131_t* dev,
     return dev->port.spi_transfer(dev->port.ctx, tx, rx, len);
 }
 
-/**
- * @brief Run one complete SPI frame.
- *
- * CSn is asserted for the whole transfer and released afterwards. A failing
- * CSn release is reported only when the transfer itself succeeded, so the more
- * specific error survives.
- */
+/* CSn is held for the transfer; a failing release is reported only when the
+ * transfer itself succeeded. */
 static sig24131_status_t transact(sig24131_t* dev,
                                   const uint8_t* tx,
                                   uint8_t* rx,
@@ -88,7 +89,9 @@ static sig24131_status_t send_command(sig24131_t* dev,
     return transact(dev, tx, rx, sizeof(tx));
 }
 
-/* 24-bit MSB-first helpers ----------------------------------------------- */
+/*----------------------------------------------------------------------------*/
+/* 24-bit helpers                                                             */
+/*----------------------------------------------------------------------------*/
 
 static uint32_t get_u24(const uint8_t* data)
 {
@@ -105,12 +108,14 @@ static void put_u24(uint8_t* data,
     data[2] = (uint8_t)value;
 }
 
-/* Register encoding ------------------------------------------------------ */
+/*----------------------------------------------------------------------------*/
+/* Register encoding                                                          */
+/*----------------------------------------------------------------------------*/
 
-/** CONF0 bits a write can set. Bit 23 reports the clock source instead. */
+/** @brief CONF0 bits a write can set; bit 23 reports the clock source. */
 #define SIG24131_CONF0_WRITABLE 0x7FFFFFUL
 
-/** CONF0 bit 15. Above gain 2 the device ignores what is written here. */
+/** @brief CONF0 bit 15; above gain 2 the device ignores writes here. */
 #define SIG24131_CONF0_BUF 0x008000UL
 
 /** @brief CONF0 bits from config. */
@@ -118,7 +123,8 @@ static uint32_t encode_conf0(const sig24131_config_t* config)
 {
     uint32_t value = 0U;
 
-    /* Bit 22 (DATACHK) stays 0: the vendor advises against the data checksum. */
+    /* Bit 22 (DATACHK) stays 0: the vendor advises against the data
+     * checksum. */
     value |= (uint32_t)(config->vbias_enable & 1U) << 19;
     value |= (uint32_t)(config->fast_startup & 1U) << 18;
     value |= (uint32_t)(config->internal_reference_enable & 1U) << 16;
@@ -182,7 +188,9 @@ static void decode_conf1(uint32_t value,
     config->mux_n       = (sig24131_mux_t)(value & 0x0FU);
 }
 
-/* Device configuration --------------------------------------------------- */
+/*----------------------------------------------------------------------------*/
+/* Device configuration                                                       */
+/*----------------------------------------------------------------------------*/
 
 void sig24131_default_config(sig24131_config_t* config)
 {
@@ -247,20 +255,18 @@ sig24131_status_t sig24131_wakeup(sig24131_t* dev)
     return send_command(dev, SIG24131_CMD_WAKEUP);
 }
 
-/* Register access -------------------------------------------------------- */
+/*----------------------------------------------------------------------------*/
+/* Register access                                                            */
+/*----------------------------------------------------------------------------*/
 
-/** Configuration register addresses carried in the 5-bit command field. */
+/** @brief Register addresses carried in the 5-bit command field. */
 typedef enum {
     SIG24131_REG_CONF0 = 0x01,
     SIG24131_REG_CONF1 = 0x02
 } sig24131_reg_t;
 
-/**
- * @brief Write one 24-bit register.
- *
- * Deliberately not public: every register write goes through the configuration
- * path below, which is what keeps the cached copy in step with the device.
- */
+/* Deliberately not public: every register write goes through the
+ * configuration path below. */
 static sig24131_status_t write_register(sig24131_t* dev,
                                         sig24131_reg_t address,
                                         uint32_t value)
@@ -278,7 +284,7 @@ static sig24131_status_t write_register(sig24131_t* dev,
     return transact(dev, tx, rx, sizeof(tx));
 }
 
-/** Read one 24-bit register. */
+/** @brief Read one 24-bit register. */
 static sig24131_status_t read_register(sig24131_t* dev,
                                        sig24131_reg_t address,
                                        uint32_t* value)
@@ -326,8 +332,8 @@ sig24131_status_t sig24131_write_config(sig24131_t* dev,
         return status;
     }
 
-    /* WREG is not acknowledged, so reading the registers back is the only way to
-     * know that the device accepted the configuration. */
+    /* WREG is not acknowledged, so reading the registers back is the only
+     * way to know that the device accepted the configuration. */
     status = read_register(dev, SIG24131_REG_CONF0, &read_conf0);
     if ( status == SIG24131_OK ) {
         status = read_register(dev, SIG24131_REG_CONF1, &read_conf1);
@@ -336,8 +342,8 @@ sig24131_status_t sig24131_write_config(sig24131_t* dev,
         return status;
     }
 
-    /* Bit 23 cannot be written and the input buffer bit is not trustworthy above
-     * gain 2, so neither is compared. */
+    /* Bit 23 cannot be written and the input buffer bit is not trustworthy
+     * above gain 2, so neither is compared. */
     care = SIG24131_CONF0_WRITABLE;
     if ( config->gain > SIG24131_GAIN_2 ) {
         care &= ~SIG24131_CONF0_BUF;
@@ -375,7 +381,9 @@ sig24131_status_t sig24131_read_config(sig24131_t* dev,
     return SIG24131_OK;
 }
 
-/* Conversion data -------------------------------------------------------- */
+/*----------------------------------------------------------------------------*/
+/* Conversion data                                                            */
+/*----------------------------------------------------------------------------*/
 
 sig24131_status_t sig24131_read_data(sig24131_t* dev,
                                      int32_t* code)
@@ -404,11 +412,14 @@ sig24131_status_t sig24131_read_data(sig24131_t* dev,
     return SIG24131_OK;
 }
 
-/* Data rates ------------------------------------------------------------- */
+/*----------------------------------------------------------------------------*/
+/* Data rates                                                                 */
+/*----------------------------------------------------------------------------*/
 
+/** @brief One row of the nominal data-rate table. */
 typedef struct {
-    sig24131_data_rate_t code;
-    uint32_t millihz;
+    sig24131_data_rate_t code; /**< Register code. */
+    uint32_t millihz;          /**< Nominal rate. */
 } data_rate_entry_t;
 
 static const data_rate_entry_t data_rate_table[] = {
